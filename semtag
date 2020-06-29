@@ -23,7 +23,7 @@ Usage:
   $PROG
   $PROG getlast
   $PROG getfinal
-  $PROG (final|alpha|beta|candidate) [-s <scope> (major|minor|patch|auto) | -o]
+  $PROG (final|finalhf|alpha|beta|candidate|hotfix) [-s <scope> (major|minor|patch|auto) | -o]
   $PROG --help
   $PROG --version
 Options:
@@ -51,12 +51,15 @@ Commands:
                unstaged changes, they will be reflected in the version, adding the number of
                pending commits, current branch and commit hash.
   final      Tags the current build as a final version, this only can be done on the master branch.
+  finalhf    Tags the current build as a final hotfix version, this only can be done on the master branch.
   candidate  Tags the current build as a release candidate, the tag will contain all
                the commits from the last final version.
   alpha      Tags the current build as an alpha version, the tag will contain all
                the commits from the last final version.
   beta       Tags the current build as a beta version, the tag will contain all
-               the commits from the last final version."
+               the commits from the last final version.
+  hotfix     Tags the current final build as a hotfix candidate version increasing the patch if there are new commits, 
+               the tag will contain all the commits from the last final version."
 
 # Commands and options
 ACTION="getlast"
@@ -424,6 +427,109 @@ $__commitlist"
   fi
 }
 
+function increase_hotfixrc {
+  local __latest_release=$(git tag | grep -E '^v[0-9]' | grep -v rc | grep -v alpha | grep -v beta | grep -v hotfix | sort -V | tail -1)
+  local semver_parts=(${__latest_release//./ })
+  local _major=${semver_parts[0]}
+  local _minor=${semver_parts[1]}
+  local _patch=${semver_parts[2]}
+  local __hf_version=${_major}.${_minor}.$((_patch+1))
+  local __countcommits=$(git rev-list $__latest_release.. --count)
+  local __hf_versionrc=${__hf_version}-rc.${__countcommits}
+  
+  if [ "$displayonly" == "true" ]; then
+    echo "$__hf_versionrc"
+  else
+    local __currenttags="$(git tag)"
+	if [[ $__currenttags =~ $__hf_versionrc ]]; then
+      echo "No commits since the last hotfix rc version, not bumping version"
+    else
+      local __commitlist="$(git log --pretty=oneline $__latest_release... | cat)"
+      local __versionname=$(date -u +"%Y-%m-%dT%H:%M:%SZ")	  
+      local __message="$__versionname
+$__commitlist"
+
+      # We check we have info on the user
+      local __username=$(git config user.name)
+      if [ -z "$__username" ]; then
+        __username=$(id -u -n)
+        git config user.name $__username
+      fi
+      local __useremail=$(git config user.email)
+      if [ -z "$__useremail" ]; then
+        __useremail=$(hostname)
+        git config user.email "$__username@$__useremail"
+      fi
+
+      git tag -a $__hf_versionrc -m "$__message"
+
+      # If we have a remote, we push there
+      local __remotes=$(git remote)
+      if [[ -n $__remotes ]]; then
+        for __remote in $__remotes; do
+          git push $__remote $__hf_versionrc > /dev/null
+          if [ $? -eq 0 ]; then
+            echo "$__hf_versionrc pushed to $__remote"
+          else
+            echo "Error pushing the tag $__hf_versionrc to $__remote"
+            exit 1
+          fi
+        done
+      else
+        echo "$__hf_versionrc"
+      fi
+    fi
+  fi
+}
+
+function increase_hotfix {
+  local __latest_release=$(git tag | grep -E '^v[0-9]' | grep -v rc | grep -v alpha | grep -v beta | grep -v hotfix | sort -V | tail -1)
+  local semver_parts=(${__latest_release//./ })
+  local _major=${semver_parts[0]}
+  local _minor=${semver_parts[1]}
+  local _patch=${semver_parts[2]}
+  local __hf_version=${_major}.${_minor}.$((_patch+1))
+  
+  if [ "$displayonly" == "true" ]; then
+    echo "$__hf_version"
+  else
+    local __commitlist="$(git log --pretty=oneline $__latest_release... | cat)"
+    local __versionname=$(date -u +"%Y-%m-%dT%H:%M:%SZ")	  
+    local __message="$__versionname
+$__commitlist"
+
+    # We check we have info on the user
+    local __username=$(git config user.name)
+    if [ -z "$__username" ]; then
+      __username=$(id -u -n)
+      git config user.name $__username
+    fi
+    local __useremail=$(git config user.email)
+    if [ -z "$__useremail" ]; then
+      __useremail=$(hostname)
+      git config user.email "$__username@$__useremail"
+    fi
+
+    git tag -a $__hf_version -m "$__message"
+
+    # If we have a remote, we push there
+    local __remotes=$(git remote)
+    if [[ -n $__remotes ]]; then
+      for __remote in $__remotes; do
+        git push $__remote $__hf_version > /dev/null
+        if [ $? -eq 0 ]; then
+          echo "$__hf_version pushed to $__remote"
+        else
+          echo "Error pushing the tag $__hf_version to $__remote"
+          exit 1
+        fi
+      done
+    else
+      echo "$__hf_version"
+    fi
+  fi
+}
+
 function check_git_dirty_status {
   local __repostatus=
   get_work_tree_status __repostatus
@@ -591,6 +697,17 @@ case $ACTION in
     fi
     increase_version
     ;;
+  finalhf)
+    init
+    diff=$(git diff master | cat)
+    if [ "$forcetag" == "false" ]; then
+      if [ -n "$diff" ]; then
+        echo "ERROR: Branch must be updated with master for final hotfix versions"
+        exit 1
+      fi
+    fi
+    increase_hotfix
+    ;;
   alpha|beta)
     init
     identifier="$ACTION"
@@ -600,6 +717,11 @@ case $ACTION in
     init
     identifier="rc"
     increase_version
+    ;;
+  hotfix)
+    init
+    identifier="hf"
+    increase_hotfixrc
     ;;
   getlast)
     init
