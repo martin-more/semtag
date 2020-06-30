@@ -398,11 +398,17 @@ $__commitlist"
       local __username=$(git config user.name)
       if [ -z "$__username" ]; then
         __username=$CI_TAGGING_USERNAME
+        if [ -z "$__username" ]; then
+          __username=$(id -u -n)
+        fi
         git config user.name $__username
       fi
       local __useremail=$(git config user.email)
       if [ -z "$__useremail" ]; then
         __useremail=$CI_TAGGING_USEREMAIL
+        if [ -z "$__useremail" ]; then
+          __useremail=$(hostname)
+        fi
         git config user.email "$__username@$__useremail"
       fi
 
@@ -453,11 +459,17 @@ $__commitlist"
       local __username=$(git config user.name)
       if [ -z "$__username" ]; then
         __username=$CI_TAGGING_USERNAME
+        if [ -z "$__username" ]; then
+          __username=$(id -u -n)
+        fi
         git config user.name $__username
       fi
       local __useremail=$(git config user.email)
       if [ -z "$__useremail" ]; then
         __useremail=$CI_TAGGING_USEREMAIL
+        if [ -z "$__useremail" ]; then
+          __useremail=$(hostname)
+        fi
         git config user.email "$__username@$__useremail"
       fi
 
@@ -502,11 +514,17 @@ $__commitlist"
     local __username=$(git config user.name)
     if [ -z "$__username" ]; then
       __username=$CI_TAGGING_USERNAME
+      if [ -z "$__username" ]; then
+        __username=$(id -u -n)
+      fi
       git config user.name $__username
     fi
     local __useremail=$(git config user.email)
     if [ -z "$__useremail" ]; then
       __useremail=$CI_TAGGING_USEREMAIL
+      if [ -z "$__useremail" ]; then
+        __useremail=$(hostname)
+      fi
       git config user.email "$__username@$__useremail"
     fi
 
